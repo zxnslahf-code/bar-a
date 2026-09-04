@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barça — Partidos</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root{
+    --grana:#A50044;
+    --bg:#12141c;
+    --card:#1c1f29;
+    --text:#e8e6df;
+    --muted:#8b8d96;
+    --border:#2c2f3a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    padding:24px 16px 60px;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  h1{
+    font-size:22px;
+    margin:0 0 4px;
+    border-bottom:3px solid var(--grana);
+    padding-bottom:12px;
+  }
+  h2{
+    font-size:13px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin:28px 0 8px;
+  }
+  .row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .info{flex:1;min-width:150px;}
+  .date{font-size:12px;color:var(--muted);}
+  .teams{font-size:14px;}
+  .score-input{
+    width:34px;
+    text-align:center;
+    background:var(--card);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:4px;
+    padding:5px 3px;
+    font-size:14px;
+  }
+  .score-sep{color:var(--muted);}
+  .note-input{
+    flex-basis:100%;
+    background:var(--card);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:4px;
+    padding:5px 8px;
+    font-size:12px;
+    margin-top:4px;
+  }
+  .note-input::placeholder{color:var(--muted);}
+  .move-btn{
+    background:none;
+    border:1px solid var(--border);
+    color:var(--muted);
+    border-radius:4px;
+    padding:5px 8px;
+    font-size:11px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .move-btn:hover{border-color:var(--grana);color:var(--text);}
+  #saveStatus{font-size:11px;color:var(--muted);height:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Barça — Partidos</h1>
+
+  <h2>Jugados</h2>
+  <div id="jugados-list"></div>
+
+  <h2>Próximos</h2>
+  <div id="proximos-list"></div>
+
+  <p id="saveStatus"></p>
+</div>
+
+<script>
+const STORAGE_KEY = 'barca-datos';
+
+const partidos = [
+  // Jugados
+  {id:'j1', date:'23 ago 2026', home:'Elche CF', away:'FC Barcelona', hs:0, as:5, played:true},
+  {id:'j2', date:'27 ago 2026', home:'FC Barcelona', away:'Athletic Bilbao', hs:2, as:0, played:true},
+  {id:'j3', date:'31 ago 2026', home:'FC Barcelona', away:'Rayo Vallecano', hs:5, as:2, played:true},
+
+  // Próximos - LaLiga
+  {id:'p1', date:'6 sep 2026', home:'Valencia CF', away:'FC Barcelona', played:false},
+  {id:'p2', date:'13 sep 2026', home:'Levante UD', away:'FC Barcelona', played:false},
+  {id:'p3', date:'16 sep 2026', home:'FC Barcelona', away:'Racing Santander', played:false},
+  {id:'p4', date:'19 sep 2026', home:'Sevilla FC', away:'FC Barcelona', played:false},
+  {id:'p5', date:'11 oct 2026', home:'FC Barcelona', away:'Getafe CF', played:false},
+  {id:'p6', date:'18 oct 2026', home:'Real Betis', away:'FC Barcelona', played:false},
+  {id:'p7', date:'25 oct 2026', home:'FC Barcelona', away:'Real Madrid', played:false},
+  {id:'p8', date:'1 nov 2026', home:'FC Barcelona', away:'Deportivo Alavés', played:false},
+  {id:'p9', date:'8 nov 2026', home:'Atlético Madrid', away:'FC Barcelona', played:false},
+  {id:'p10', date:'22 nov 2026', home:'FC Barcelona', away:'Villarreal CF', played:false},
+
+  // Próximos - Champions League
+  {id:'p11', date:'9 sep 2026', home:'FC Barcelona', away:'Feyenoord', played:false, comp:'UCL'},
+  {id:'p12', date:'13 oct 2026', home:'Galatasaray', away:'FC Barcelona', played:false, comp:'UCL'},
+  {id:'p13', date:'20 oct 2026', home:'Paris Saint-Germain', away:'FC Barcelona', played:false, comp:'UCL'},
+  {id:'p14', date:'3 nov 2026', home:'FC Barcelona', away:'Aston Villa', played:false, comp:'UCL'},
+  {id:'p15', date:'25 nov 2026', home:'Sabah', away:'FC Barcelona', played:false, comp:'UCL'},
+  {id:'p16', date:'8 dic 2026', home:'FC Barcelona', away:'Manchester City', played:false, comp:'UCL'},
+  {id:'p17', date:'20 ene 2027', home:'Sporting CP', away:'FC Barcelona', played:false, comp:'UCL'},
+  {id:'p18', date:'27 ene 2027', home:'FC Barcelona', away:'Como 1907', played:false, comp:'UCL'},
+];
+
+let saved = {};
+
+function loadSaved(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    saved = raw ? JSON.parse(raw) : {};
+  }catch(e){
+    saved = {};
+  }
+  render();
+}
+
+function persist(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    flashStatus('Guardado');
+  }catch(e){
+    flashStatus('No se pudo guardar');
+  }
+}
+
+function flashStatus(msg){
+  const el = document.getElementById('saveStatus');
+  el.textContent = msg;
+  setTimeout(()=>{ el.textContent=''; }, 1200);
+}
+
+function updateField(id, field, value){
+  saved[id] = saved[id] || {};
+  saved[id][field] = value;
+  persist();
+}
+
+function toggleJugado(id, nowPlayed){
+  saved[id] = saved[id] || {};
+  saved[id].played = nowPlayed;
+  persist();
+  render();
+}
+
+function isPlayed(p){
+  const s = saved[p.id] || {};
+  return s.played !== undefined ? s.played : p.played;
+}
+
+function renderRow(p){
+  const s = saved[p.id] || {};
+  const played = isPlayed(p);
+  const hs = s.hs !== undefined ? s.hs : (p.hs !== undefined ? p.hs : '');
+  const as = s.as !== undefined ? s.as : (p.as !== undefined ? p.as : '');
+  const note = s.note || '';
+  const compTag = p.comp ? ' · ' + p.comp : '';
+  const moveBtn = played
+    ? '<button class="move-btn" onclick="toggleJugado(\'' + p.id + '\', false)">↺ No jugado</button>'
+    : '<button class="move-btn" onclick="toggleJugado(\'' + p.id + '\', true)">✓ Ya jugado</button>';
+
+  return '<div class="row">' +
+    '<div class="info">' +
+      '<div class="date">' + p.date + compTag + '</div>' +
+      '<div class="teams">' + p.home + ' — ' + p.away + '</div>' +
+    '</div>' +
+    '<input class="score-input" type="number" min="0" value="' + hs + '" onchange="updateField(\'' + p.id + '\',\'hs\', this.value)">' +
+    '<span class="score-sep">:</span>' +
+    '<input class="score-input" type="number" min="0" value="' + as + '" onchange="updateField(\'' + p.id + '\',\'as\', this.value)">' +
+    moveBtn +
+    '<input class="note-input" type="text" placeholder="Nota..." value="' + note.replace(/"/g,'&quot;') + '" onchange="updateField(\'' + p.id + '\',\'note\', this.value)">' +
+  '</div>';
+}
+
+function render(){
+  document.getElementById('jugados-list').innerHTML = partidos.filter(isPlayed).map(renderRow).join('');
+  document.getElementById('proximos-list').innerHTML = partidos.filter(function(p){return !isPlayed(p);}).map(renderRow).join('');
+}
+
+loadSaved();
+</script>
+</body>
+</html>
